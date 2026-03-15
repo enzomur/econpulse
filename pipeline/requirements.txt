@@ -1,0 +1,9 @@
+requests==2.31.0
+pandas==2.1.4
+geopandas==0.14.2
+supabase==2.3.4
+python-dotenv==1.0.0
+schedule==1.2.1
+shapely==2.0.2
+pyproj==3.6.1
+numpy==1.26.3
