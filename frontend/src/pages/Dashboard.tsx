@@ -2,10 +2,13 @@ import { useEffect } from 'react'
 import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet'
 import { useStore } from '../store'
 import { api } from '../api'
-import type { TractFeature } from '../types'
+import TrendChart from '../components/TrendChart'
+import DemographicsPanel from '../components/DemographicsPanel'
+import EligibilityBadges from '../components/EligibilityBadges'
+import type { TractFeature, ViewMode } from '../types'
 
-// Score quintile colors
-const quintileColors = [
+// Vitality mode colors (green = high score = thriving)
+const vitalityColors = [
   '#ef4444', // Q1 - Red (lowest)
   '#f97316', // Q2 - Orange
   '#eab308', // Q3 - Yellow
@@ -13,17 +16,41 @@ const quintileColors = [
   '#00d4aa', // Q5 - Teal (highest)
 ]
 
-function getQuintileColor(score: number | undefined): string {
+// Investment priority mode colors (higher = more investment needed)
+const investmentColors = [
+  '#6b7280', // Q1 - Gray (low priority)
+  '#3b82f6', // Q2 - Blue
+  '#8b5cf6', // Q3 - Purple
+  '#ec4899', // Q4 - Pink
+  '#ef4444', // Q5 - Red (high priority)
+]
+
+function getQuintileColor(score: number | undefined, viewMode: ViewMode): string {
+  const colors = viewMode === 'vitality' ? vitalityColors : investmentColors
   if (score === undefined || score === null) return '#475569'
-  if (score < 20) return quintileColors[0]
-  if (score < 40) return quintileColors[1]
-  if (score < 60) return quintileColors[2]
-  if (score < 80) return quintileColors[3]
-  return quintileColors[4]
+  if (score < 20) return colors[0]
+  if (score < 40) return colors[1]
+  if (score < 60) return colors[2]
+  if (score < 80) return colors[3]
+  return colors[4]
+}
+
+// Calculate investment priority score (inverted vitality + weighted by potential)
+function calculateInvestmentPriority(feature: TractFeature): number {
+  const props = feature.properties
+  const compositeScore = props.composite_score ?? 50
+  const workforceInflowScore = props.workforce_inflow_score ?? 50
+
+  // 60% need (inverse of vitality) + 40% potential (workforce inflow)
+  const needScore = 100 - compositeScore
+  const potentialScore = workforceInflowScore
+  return needScore * 0.6 + potentialScore * 0.4
 }
 
 export default function Dashboard() {
   const {
+    viewMode,
+    setViewMode,
     selectedState,
     selectedCounty,
     tracts,
@@ -80,6 +107,11 @@ export default function Dashboard() {
   }, [selectedTractId, setTractDetail, setLoadingDetail, setError])
 
   const getScoreValue = (feature: TractFeature): number | undefined => {
+    // In investment mode with composite selected, use investment priority calculation
+    if (viewMode === 'investment' && scoreMetric === 'composite') {
+      return calculateInvestmentPriority(feature)
+    }
+
     const props = feature.properties
     if (scoreMetric === 'composite') return props.composite_score
     if (scoreMetric === 'employment_density') return props.employment_density_score
@@ -90,11 +122,66 @@ export default function Dashboard() {
     return props.composite_score
   }
 
+  // Get legend labels based on view mode
+  const getLegendLabels = () => {
+    if (viewMode === 'vitality') {
+      return [
+        { range: '80-100', label: 'Very High', description: 'Thriving' },
+        { range: '60-80', label: 'High', description: 'Strong' },
+        { range: '40-60', label: 'Moderate', description: 'Stable' },
+        { range: '20-40', label: 'Low', description: 'Struggling' },
+        { range: '0-20', label: 'Very Low', description: 'Distressed' },
+      ]
+    }
+    return [
+      { range: '80-100', label: 'Critical', description: 'Highest Priority' },
+      { range: '60-80', label: 'High', description: 'Strong Need' },
+      { range: '40-60', label: 'Moderate', description: 'Some Need' },
+      { range: '20-40', label: 'Low', description: 'Lower Priority' },
+      { range: '0-20', label: 'Minimal', description: 'Thriving Area' },
+    ]
+  }
+
+  const legendLabels = getLegendLabels()
+  const currentColors = viewMode === 'vitality' ? vitalityColors : investmentColors
+
   return (
     <div className="flex h-full">
       {/* Left Panel - Controls */}
       <div className="w-72 bg-slate-900 border-r border-slate-800 p-4 overflow-y-auto">
         <div className="space-y-6">
+          {/* View Mode Toggle */}
+          <div>
+            <h3 className="text-sm font-medium text-slate-300 mb-2">View Mode</h3>
+            <div className="flex bg-slate-800 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('vitality')}
+                className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === 'vitality'
+                    ? 'bg-teal-accent text-slate-900'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Economic Vitality
+              </button>
+              <button
+                onClick={() => setViewMode('investment')}
+                className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === 'investment'
+                    ? 'bg-purple-500 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Investment Priority
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mt-2">
+              {viewMode === 'vitality'
+                ? 'Higher scores = thriving areas'
+                : 'Higher scores = more investment needed'}
+            </p>
+          </div>
+
           {/* Area Selector */}
           <div>
             <h3 className="text-sm font-medium text-slate-300 mb-2">Area</h3>
@@ -150,19 +237,15 @@ export default function Dashboard() {
 
           {/* Legend */}
           <div>
-            <h3 className="text-sm font-medium text-slate-300 mb-2">Legend</h3>
+            <h3 className="text-sm font-medium text-slate-300 mb-2">
+              {viewMode === 'vitality' ? 'Economic Vitality' : 'Investment Priority'}
+            </h3>
             <div className="space-y-1">
-              {[
-                { range: '80-100', color: quintileColors[4], label: 'Very High' },
-                { range: '60-80', color: quintileColors[3], label: 'High' },
-                { range: '40-60', color: quintileColors[2], label: 'Moderate' },
-                { range: '20-40', color: quintileColors[1], label: 'Low' },
-                { range: '0-20', color: quintileColors[0], label: 'Very Low' },
-              ].map((item) => (
+              {legendLabels.map((item, index) => (
                 <div key={item.range} className="flex items-center gap-2 text-xs">
                   <div
                     className="w-4 h-4 rounded"
-                    style={{ backgroundColor: item.color }}
+                    style={{ backgroundColor: currentColors[4 - index] }}
                   />
                   <span className="text-slate-400">{item.range}</span>
                   <span className="text-slate-500">({item.label})</span>
@@ -192,12 +275,12 @@ export default function Dashboard() {
           />
           {tracts && tracts.features.length > 0 && (
             <GeoJSON
-              key={scoreMetric}
+              key={`${scoreMetric}-${viewMode}`}
               data={tracts}
               style={(feature) => ({
-                fillColor: getQuintileColor(getScoreValue(feature as TractFeature)),
+                fillColor: getQuintileColor(getScoreValue(feature as TractFeature), viewMode),
                 fillOpacity: feature?.properties?.geoid === selectedTractId ? 0.9 : 0.6,
-                color: feature?.properties?.geoid === selectedTractId ? '#00d4aa' : '#475569',
+                color: feature?.properties?.geoid === selectedTractId ? (viewMode === 'vitality' ? '#00d4aa' : '#a855f7') : '#475569',
                 weight: feature?.properties?.geoid === selectedTractId ? 3 : 1,
               })}
               onEachFeature={(feature, layer) => {
@@ -230,16 +313,48 @@ export default function Dashboard() {
                 {tractDetail.tract.name || `Tract ${tractDetail.tract.geoid}`}
               </h2>
               <p className="text-sm text-slate-400 font-mono">{tractDetail.tract.geoid}</p>
+              {tractDetail.eligibility && (
+                <div className="mt-2">
+                  <EligibilityBadges eligibility={tractDetail.eligibility} />
+                </div>
+              )}
             </div>
 
-            {/* Composite Score */}
+            {/* Score Display */}
             <div className="text-center py-6 bg-slate-800 rounded-xl">
-              <div className="text-5xl font-bold font-mono" style={{
-                color: getQuintileColor(tractDetail.scores[0]?.composite_score)
-              }}>
-                {tractDetail.scores[0]?.composite_score?.toFixed(1) || '--'}
-              </div>
-              <p className="text-sm text-slate-400 mt-1">Composite Score</p>
+              {viewMode === 'vitality' ? (
+                <>
+                  <div className="text-5xl font-bold font-mono" style={{
+                    color: getQuintileColor(tractDetail.scores[0]?.composite_score, viewMode)
+                  }}>
+                    {tractDetail.scores[0]?.composite_score?.toFixed(1) || '--'}
+                  </div>
+                  <p className="text-sm text-slate-400 mt-1">Economic Vitality Score</p>
+                </>
+              ) : (
+                <>
+                  <div className="text-5xl font-bold font-mono" style={{
+                    color: getQuintileColor(
+                      (() => {
+                        const composite = tractDetail.scores[0]?.composite_score ?? 50
+                        const inflow = tractDetail.scores[0]?.workforce_inflow_score ?? 50
+                        return (100 - composite) * 0.6 + inflow * 0.4
+                      })(),
+                      viewMode
+                    )
+                  }}>
+                    {(() => {
+                      const composite = tractDetail.scores[0]?.composite_score ?? 50
+                      const inflow = tractDetail.scores[0]?.workforce_inflow_score ?? 50
+                      return ((100 - composite) * 0.6 + inflow * 0.4).toFixed(1)
+                    })()}
+                  </div>
+                  <p className="text-sm text-slate-400 mt-1">Investment Priority Score</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    (Vitality: {tractDetail.scores[0]?.composite_score?.toFixed(1) || '--'})
+                  </p>
+                </>
+              )}
               <div className="flex items-center justify-center gap-1 mt-2">
                 {tractDetail.trend === 'up' && <span className="text-green-400">↑ Rising</span>}
                 {tractDetail.trend === 'down' && <span className="text-red-400">↓ Declining</span>}
@@ -268,13 +383,25 @@ export default function Dashboard() {
                         className="h-full rounded-full"
                         style={{
                           width: `${item.value || 0}%`,
-                          backgroundColor: getQuintileColor(item.value),
+                          backgroundColor: getQuintileColor(item.value, 'vitality'),
                         }}
                       />
                     </div>
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Trend Chart */}
+            <div>
+              <h3 className="text-sm font-medium text-slate-300 mb-3">Score History</h3>
+              <TrendChart scores={tractDetail.scores} selectedMetric={scoreMetric} />
+            </div>
+
+            {/* Demographics */}
+            <div>
+              <h3 className="text-sm font-medium text-slate-300 mb-3">Demographics</h3>
+              <DemographicsPanel demographics={tractDetail.demographics} />
             </div>
 
             {/* POI Counts */}

@@ -1,7 +1,11 @@
 import { create } from 'zustand'
-import type { TractGeoJSON, TractDetail, Alert, VoidResult } from '../types'
+import type { TractGeoJSON, TractDetail, Alert, VoidResult, ViewMode, DemographicOverlay } from '../types'
 
 interface AppState {
+  // View mode
+  viewMode: ViewMode
+  setViewMode: (mode: ViewMode) => void
+
   // Geography selection
   selectedState: string
   selectedCounty: string
@@ -24,6 +28,10 @@ interface AppState {
   // Score display mode
   scoreMetric: 'composite' | 'employment_density' | 'formation_rate' | 'workforce_inflow' | 'income_growth' | 'diversity'
   setScoreMetric: (metric: AppState['scoreMetric']) => void
+
+  // Demographic overlay for map
+  demographicOverlay: DemographicOverlay
+  setDemographicOverlay: (overlay: DemographicOverlay) => void
 
   // Score weights
   weights: {
@@ -57,6 +65,10 @@ interface AppState {
 }
 
 export const useStore = create<AppState>((set) => ({
+  // View mode - default to vitality
+  viewMode: 'vitality',
+  setViewMode: (mode) => set({ viewMode: mode }),
+
   // Geography - default to Manhattan
   selectedState: '36',
   selectedCounty: '061',
@@ -79,6 +91,10 @@ export const useStore = create<AppState>((set) => ({
   // Score display
   scoreMetric: 'composite',
   setScoreMetric: (metric) => set({ scoreMetric: metric }),
+
+  // Demographic overlay
+  demographicOverlay: 'none',
+  setDemographicOverlay: (overlay) => set({ demographicOverlay: overlay }),
 
   // Weights
   weights: {

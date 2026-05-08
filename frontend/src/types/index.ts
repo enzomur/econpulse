@@ -1,3 +1,5 @@
+export type ViewMode = 'vitality' | 'investment'
+
 export interface Tract {
   geoid: string
   name: string
@@ -16,6 +18,31 @@ export interface TractMetrics {
   median_household_income: number
   business_diversity_index: number
   business_formation_rate: number
+  // Demographics
+  poverty_rate?: number
+  unemployment_rate?: number
+  population_density?: number
+  college_educated_pct?: number
+}
+
+export interface TractDemographics {
+  poverty_rate?: number
+  unemployment_rate?: number
+  population_density?: number
+  college_educated_pct?: number
+  median_household_income?: number
+}
+
+export type DemographicOverlay = 'none' | 'poverty' | 'unemployment' | 'population_density' | 'education'
+
+export interface TractEligibility {
+  opportunity_zone?: boolean
+  empowerment_zone?: boolean
+  hub_zone?: boolean
+  promise_zone?: boolean
+  new_market_tax_credit?: boolean
+  state_enterprise_zone?: boolean
+  designation_year?: number
 }
 
 export interface VitalityScore {
@@ -71,6 +98,8 @@ export interface TractDetail {
   tract: Tract
   scores: VitalityScore[]
   metrics: TractMetrics | null
+  demographics: TractDemographics | null
+  eligibility: TractEligibility | null
   poi_counts: POICount[]
   trend: 'up' | 'flat' | 'down'
 }
