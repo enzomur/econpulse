@@ -66,8 +66,11 @@ export const api = {
       p_county_fips: county,
     })
 
-    // Get latest scores for this county only (filter by geoid prefix to avoid 1000 row limit issues)
-    const geoidPrefix = `${state}${county}`
+    // Get scores only for the tracts we have (using IN filter)
+    // This avoids issues with mixed geoid formats in the database
+    const tractGeoids = tracts.map(t => t.geoid)
+    const geoidList = tractGeoids.join(',')
+
     const scores = await supabaseQuery<Array<{
       geoid: string
       composite_score: number
@@ -76,7 +79,7 @@ export const api = {
       workforce_inflow_score: number
       income_growth_score: number
       diversity_score: number
-    }>>('vitality_scores', `select=geoid,composite_score,employment_density_score,formation_rate_score,workforce_inflow_score,income_growth_score,diversity_score&geoid=like.${geoidPrefix}*&order=period.desc`)
+    }>>('vitality_scores', `select=geoid,composite_score,employment_density_score,formation_rate_score,workforce_inflow_score,income_growth_score,diversity_score&geoid=in.(${geoidList})&order=period.desc`)
 
     // Build score map (latest score per geoid)
     const scoreMap = new Map<string, typeof scores[0]>()
