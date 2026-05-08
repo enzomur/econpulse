@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet'
 import { useStore } from '../store'
 import { api } from '../api'
@@ -150,6 +150,21 @@ export default function Dashboard() {
 
   const legendLabels = getLegendLabels()
   const currentColors = viewMode === 'vitality' ? vitalityColors : investmentColors
+
+  // Report download state
+  const [isDownloading, setIsDownloading] = useState(false)
+
+  const handleDownloadReport = async () => {
+    if (!selectedTractId) return
+    setIsDownloading(true)
+    try {
+      await api.downloadReport(selectedTractId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate report')
+    } finally {
+      setIsDownloading(false)
+    }
+  }
 
   return (
     <div className="flex h-full">
@@ -428,8 +443,12 @@ export default function Dashboard() {
             )}
 
             {/* Generate Report Button */}
-            <button className="w-full bg-teal-accent hover:bg-teal-400 text-slate-900 font-medium py-3 rounded-lg transition-colors">
-              Generate Report
+            <button
+              onClick={handleDownloadReport}
+              disabled={isDownloading}
+              className="w-full bg-teal-accent hover:bg-teal-400 text-slate-900 font-medium py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isDownloading ? 'Generating PDF...' : 'Download Report'}
             </button>
           </div>
         ) : (

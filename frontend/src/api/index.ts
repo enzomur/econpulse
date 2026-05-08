@@ -236,9 +236,36 @@ export const api = {
     return { voids: voids || [] }
   },
 
-  // Generate report (placeholder - needs backend)
-  generateReport: async (_geoid: string, _period?: string): Promise<{ job_id: string; status: string }> => {
-    return { job_id: 'not-implemented', status: 'error' }
+  // Generate PDF report via Supabase Edge Function
+  generateReport: async (geoid: string): Promise<Blob> => {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-report`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ geoid }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new ApiError(response.status, error.error || 'Failed to generate report')
+    }
+
+    return response.blob()
+  },
+
+  // Download report helper
+  downloadReport: async (geoid: string): Promise<void> => {
+    const blob = await api.generateReport(geoid)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `econpulse-report-${geoid}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   },
 }
 

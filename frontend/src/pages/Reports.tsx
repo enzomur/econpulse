@@ -17,8 +17,8 @@ export default function Reports() {
     setError(null)
 
     try {
-      const result = await api.generateReport(geoid)
-      setJobId(result.job_id)
+      await api.downloadReport(geoid)
+      setJobId('downloaded')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate report')
     } finally {
@@ -60,9 +60,7 @@ export default function Reports() {
 
           {jobId && (
             <div className="bg-teal-accent/10 border border-teal-accent/30 text-teal-accent rounded-lg px-4 py-3 text-sm">
-              Report queued! Job ID: <span className="font-mono">{jobId}</span>
-              <br />
-              <span className="text-slate-400">The report will be emailed when ready.</span>
+              Report downloaded successfully!
             </div>
           )}
 
