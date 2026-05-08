@@ -34,6 +34,11 @@ ACS_VARIABLES = {
     "B15003_023E": "edu_masters",
     "B15003_024E": "edu_professional",
     "B15003_025E": "edu_doctorate",
+    # Demographics for Phase 2
+    "B17001_002E": "poverty_population",  # Population below poverty
+    "B23025_005E": "unemployed",  # Unemployed in labor force
+    "B23025_002E": "labor_force",  # Total labor force
+    "B15003_001E": "edu_total_population",  # Total population 25+ for education
 }
 
 BASE_URL = "https://api.census.gov/data/2022/acs/acs5"
@@ -106,6 +111,16 @@ def transform_data(df: pd.DataFrame) -> pd.DataFrame:
         df["edu_bachelors"] + df["edu_masters"] + df["edu_professional"] + df["edu_doctorate"]
     )
 
+    # Calculate demographic rates
+    # Poverty rate
+    df["poverty_rate"] = (df["poverty_population"] / df["total_population"] * 100).fillna(0).clip(0, 100)
+
+    # Unemployment rate
+    df["unemployment_rate"] = (df["unemployed"] / df["labor_force"] * 100).fillna(0).clip(0, 100)
+
+    # College educated percentage (of 25+ population)
+    df["college_educated_pct"] = (df["college_educated"] / df["edu_total_population"] * 100).fillna(0).clip(0, 100)
+
     # Select final columns
     result = df[
         [
@@ -117,6 +132,9 @@ def transform_data(df: pd.DataFrame) -> pd.DataFrame:
             "vacant_units",
             "vacancy_rate",
             "college_educated",
+            "poverty_rate",
+            "unemployment_rate",
+            "college_educated_pct",
         ]
     ].copy()
 
@@ -136,6 +154,17 @@ def upsert_to_supabase(df: pd.DataFrame, supabase_url: str, supabase_key: str) -
 
     for _, row in df.iterrows():
         try:
+            # Calculate population density (per sq km) - need to get area from tracts table
+            population_density = None
+            try:
+                tract_result = client.table("tracts").select("area_sq_km").eq("geoid", row["geoid"]).execute()
+                if tract_result.data and tract_result.data[0].get("area_sq_km"):
+                    area = float(tract_result.data[0]["area_sq_km"])
+                    if area > 0 and pd.notna(row["total_population"]):
+                        population_density = float(row["total_population"]) / area
+            except Exception:
+                pass  # Skip if can't get area
+
             record = {
                 "geoid": row["geoid"],
                 "period": today,
@@ -145,6 +174,22 @@ def upsert_to_supabase(df: pd.DataFrame, supabase_url: str, supabase_key: str) -
                     if pd.notna(row["median_household_income"])
                     else None
                 ),
+                "poverty_rate": (
+                    float(row["poverty_rate"])
+                    if pd.notna(row["poverty_rate"])
+                    else None
+                ),
+                "unemployment_rate": (
+                    float(row["unemployment_rate"])
+                    if pd.notna(row["unemployment_rate"])
+                    else None
+                ),
+                "college_educated_pct": (
+                    float(row["college_educated_pct"])
+                    if pd.notna(row["college_educated_pct"])
+                    else None
+                ),
+                "population_density": population_density,
             }
 
             # Upsert to tract_metrics

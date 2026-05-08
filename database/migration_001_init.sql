@@ -280,6 +280,33 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
+-- Get tracts with geometry for GeoJSON rendering (used by frontend map)
+CREATE OR REPLACE FUNCTION get_tracts_geojson(
+    p_state_fips TEXT,
+    p_county_fips TEXT
+)
+RETURNS TABLE(
+    geoid TEXT,
+    name TEXT,
+    state_fips TEXT,
+    county_fips TEXT,
+    tract_fips TEXT,
+    area_sq_km NUMERIC,
+    geometry_json JSONB
+) AS $$
+    SELECT
+        t.geoid,
+        t.name,
+        t.state_fips,
+        t.county_fips,
+        t.tract_fips,
+        t.area_sq_km,
+        ST_AsGeoJSON(t.geometry)::jsonb as geometry_json
+    FROM tracts t
+    WHERE t.state_fips = p_state_fips
+      AND t.county_fips = p_county_fips;
+$$ LANGUAGE SQL STABLE;
+
 -- Find opportunity voids
 CREATE OR REPLACE FUNCTION find_opportunity_voids(
     p_state_fips TEXT,
@@ -300,6 +327,45 @@ RETURNS TABLE(
         tm.worker_inflow_count,
         COALESCE(pc.count, 0) as poi_count,
         vs.composite_score
+    FROM tracts t
+    JOIN tract_metrics tm ON tm.geoid = t.geoid
+    LEFT JOIN vitality_scores vs ON vs.geoid = t.geoid
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) as count
+        FROM pois
+        WHERE pois.geoid = t.geoid AND pois.category = p_category
+    ) pc ON true
+    WHERE t.state_fips = p_state_fips
+      AND t.county_fips = p_county_fips
+      AND tm.worker_inflow_count >= p_min_inflow
+      AND COALESCE(pc.count, 0) < 3
+    ORDER BY tm.worker_inflow_count DESC;
+$$ LANGUAGE SQL STABLE;
+
+-- Find opportunity voids with coordinates (for map markers)
+CREATE OR REPLACE FUNCTION find_opportunity_voids_with_coords(
+    p_state_fips TEXT,
+    p_county_fips TEXT,
+    p_category TEXT,
+    p_min_inflow INTEGER
+)
+RETURNS TABLE(
+    geoid TEXT,
+    name TEXT,
+    worker_inflow_count INTEGER,
+    poi_count BIGINT,
+    composite_score NUMERIC,
+    lat FLOAT,
+    lng FLOAT
+) AS $$
+    SELECT
+        t.geoid,
+        t.name,
+        tm.worker_inflow_count,
+        COALESCE(pc.count, 0) as poi_count,
+        vs.composite_score,
+        ST_Y(ST_Centroid(t.geometry)) as lat,
+        ST_X(ST_Centroid(t.geometry)) as lng
     FROM tracts t
     JOIN tract_metrics tm ON tm.geoid = t.geoid
     LEFT JOIN vitality_scores vs ON vs.geoid = t.geoid
