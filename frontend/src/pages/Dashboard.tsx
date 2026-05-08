@@ -36,6 +36,7 @@ function getQuintileColor(score: number | undefined, viewMode: ViewMode): string
 }
 
 // Calculate investment priority score (inverted vitality + weighted by potential)
+// Returns raw score - normalization happens at display time
 function calculateInvestmentPriority(feature: TractFeature): number {
   const props = feature.properties
   const compositeScore = props.composite_score ?? 50
@@ -44,7 +45,12 @@ function calculateInvestmentPriority(feature: TractFeature): number {
   // 60% need (inverse of vitality) + 40% potential (workforce inflow)
   const needScore = 100 - compositeScore
   const potentialScore = workforceInflowScore
-  return needScore * 0.6 + potentialScore * 0.4
+  const rawScore = needScore * 0.6 + potentialScore * 0.4
+
+  // Normalize to spread out the typical range (30-70) to full 0-100 scale
+  // Most scores cluster between 35-65, so we expand that range
+  const normalized = ((rawScore - 35) / 30) * 100
+  return Math.max(0, Math.min(100, normalized))
 }
 
 export default function Dashboard() {
