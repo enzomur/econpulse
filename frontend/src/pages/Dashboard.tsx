@@ -36,7 +36,7 @@ function getQuintileColor(score: number | undefined, viewMode: ViewMode): string
 }
 
 // Calculate investment priority score (inverted vitality + weighted by potential)
-// Returns raw score - normalization happens at display time
+// Normalized to spread scores across full 0-100 range for better color distribution
 function calculateInvestmentPriority(feature: TractFeature): number {
   const props = feature.properties
   const compositeScore = props.composite_score ?? 50
