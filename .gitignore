@@ -58,3 +58,20 @@ htmlcov/
 *.csv
 *.gz
 !requirements.txt
+
+# Claude Code workspace
+.claude/
+
+# GitHub Actions (not used - deploying via Vercel)
+.github/
+
+# One-time setup scripts (not needed for runtime)
+backend/app/load_tracts.py
+database/add_geometry_helper.sql
+database/load_data.sql
+
+# Railway config (unused - using Vercel + Supabase)
+railway.json
+
+# Supabase temp files
+supabase/.temp/
