@@ -151,43 +151,53 @@ export const api = {
     }
     const poi_counts = Array.from(poiCountMap.entries()).map(([category, count]) => ({ category, count }))
 
-    // Get demographics from tract_metrics
-    const metricsData = await supabaseQuery<Array<{
-      poverty_rate: number | null
-      unemployment_rate: number | null
-      population_density: number | null
-      college_educated_pct: number | null
-      median_household_income: number | null
-    }>>('tract_metrics', `select=poverty_rate,unemployment_rate,population_density,college_educated_pct,median_household_income&geoid=eq.${geoid}&order=period.desc&limit=1`)
+    // Get demographics from tract_metrics (graceful fail if columns don't exist)
+    let demographics: TractDemographics | null = null
+    try {
+      const metricsData = await supabaseQuery<Array<{
+        poverty_rate: number | null
+        unemployment_rate: number | null
+        population_density: number | null
+        college_educated_pct: number | null
+        median_household_income: number | null
+      }>>('tract_metrics', `select=poverty_rate,unemployment_rate,population_density,college_educated_pct,median_household_income&geoid=eq.${geoid}&order=period.desc&limit=1`)
 
-    const demographics: TractDemographics | null = metricsData[0] ? {
-      poverty_rate: metricsData[0].poverty_rate ?? undefined,
-      unemployment_rate: metricsData[0].unemployment_rate ?? undefined,
-      population_density: metricsData[0].population_density ?? undefined,
-      college_educated_pct: metricsData[0].college_educated_pct ?? undefined,
-      median_household_income: metricsData[0].median_household_income ?? undefined,
-    } : null
+      demographics = metricsData[0] ? {
+        poverty_rate: metricsData[0].poverty_rate ?? undefined,
+        unemployment_rate: metricsData[0].unemployment_rate ?? undefined,
+        population_density: metricsData[0].population_density ?? undefined,
+        college_educated_pct: metricsData[0].college_educated_pct ?? undefined,
+        median_household_income: metricsData[0].median_household_income ?? undefined,
+      } : null
+    } catch {
+      // Demographics columns may not exist yet - continue without them
+    }
 
-    // Get eligibility data
-    const eligibilityData = await supabaseQuery<Array<{
-      opportunity_zone: boolean | null
-      empowerment_zone: boolean | null
-      hub_zone: boolean | null
-      promise_zone: boolean | null
-      new_market_tax_credit: boolean | null
-      state_enterprise_zone: boolean | null
-      designation_year: number | null
-    }>>('tract_eligibility', `select=opportunity_zone,empowerment_zone,hub_zone,promise_zone,new_market_tax_credit,state_enterprise_zone,designation_year&geoid=eq.${geoid}&limit=1`)
+    // Get eligibility data (graceful fail if table doesn't exist)
+    let eligibility: TractEligibility | null = null
+    try {
+      const eligibilityData = await supabaseQuery<Array<{
+        opportunity_zone: boolean | null
+        empowerment_zone: boolean | null
+        hub_zone: boolean | null
+        promise_zone: boolean | null
+        new_market_tax_credit: boolean | null
+        state_enterprise_zone: boolean | null
+        designation_year: number | null
+      }>>('tract_eligibility', `select=opportunity_zone,empowerment_zone,hub_zone,promise_zone,new_market_tax_credit,state_enterprise_zone,designation_year&geoid=eq.${geoid}&limit=1`)
 
-    const eligibility: TractEligibility | null = eligibilityData[0] ? {
-      opportunity_zone: eligibilityData[0].opportunity_zone ?? undefined,
-      empowerment_zone: eligibilityData[0].empowerment_zone ?? undefined,
-      hub_zone: eligibilityData[0].hub_zone ?? undefined,
-      promise_zone: eligibilityData[0].promise_zone ?? undefined,
-      new_market_tax_credit: eligibilityData[0].new_market_tax_credit ?? undefined,
-      state_enterprise_zone: eligibilityData[0].state_enterprise_zone ?? undefined,
-      designation_year: eligibilityData[0].designation_year ?? undefined,
-    } : null
+      eligibility = eligibilityData[0] ? {
+        opportunity_zone: eligibilityData[0].opportunity_zone ?? undefined,
+        empowerment_zone: eligibilityData[0].empowerment_zone ?? undefined,
+        hub_zone: eligibilityData[0].hub_zone ?? undefined,
+        promise_zone: eligibilityData[0].promise_zone ?? undefined,
+        new_market_tax_credit: eligibilityData[0].new_market_tax_credit ?? undefined,
+        state_enterprise_zone: eligibilityData[0].state_enterprise_zone ?? undefined,
+        designation_year: eligibilityData[0].designation_year ?? undefined,
+      } : null
+    } catch {
+      // Eligibility table may not exist yet - continue without it
+    }
 
     // Calculate trend
     let trend: 'up' | 'flat' | 'down' = 'flat'
